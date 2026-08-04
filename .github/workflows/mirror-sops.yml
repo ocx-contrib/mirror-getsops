@@ -6,7 +6,7 @@ name: sops
 
 on:
   schedule:
-    - cron: '53 */6 * * *'
+    - cron: '13 3-23/6 * * *'
   workflow_dispatch:
   push:
     branches: [main]
