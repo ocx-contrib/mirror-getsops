@@ -120,10 +120,10 @@ assets:
   # Uncommented together with the matching `platforms:` keys in
   # ../mirror-base.yml, never on their own. The arch suffix is mandatory here —
   # see the triple-match trap above.
-  # darwin/amd64:
-  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.amd64$"
-  # darwin/arm64:
-  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.arm64$"
+  darwin/amd64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.amd64$"
+  darwin/arm64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.arm64$"
   #
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
   # No `.windows.` infix upstream — the `.exe` suffix is the only OS marker.
