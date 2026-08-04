@@ -127,10 +127,10 @@ assets:
   #
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
   # No `.windows.` infix upstream — the `.exe` suffix is the only OS marker.
-  # windows/amd64:
-  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.amd64\\.exe$"
-  # windows/arm64:
-  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.arm64\\.exe$"
+  windows/amd64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.amd64\\.exe$"
+  windows/arm64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.arm64\\.exe$"
 
 asset_type:
   # Raw binary on every platform — there is no archive to strip, so the file
