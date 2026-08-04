@@ -1,0 +1,191 @@
+# ⚠ `extends:` is a SHALLOW merge of TOP-LEVEL KEYS. Setting a key here
+# REPLACES the base's block outright — there is no per-key merge. `platforms:`
+# is deliberately NOT restated below: it carries the container legs that make
+# this spec's bare Linux keys honest, and restating it to tweak one runner
+# would drop them all without reddening anything. This repo is single-package,
+# so the measured matrix lives in the base and nothing here touches it.
+extends: ../mirror-base.yml
+
+name: sops
+
+# Logical index package `getsops/sops` at the physical path
+# `ghcr.io/ocx-contrib/getsops/sops` — slash segments, never hyphen-flattened.
+# Two segments always. `getsops` is the project's own GitHub org (a CNCF
+# project; the tool's website is getsops.io and the binary is named for it), so
+# the org IS the brand — skill Phase 1 rule 2, the same reason jq is
+# `jqlang/jq`. The first segment must be this repo's own GitHub owner:
+# GITHUB_TOKEN only authorises packages owned by the repo the workflow runs in.
+target:
+  registry: ghcr.io
+  repository: ocx-contrib/getsops/sops
+
+source:
+  type: github_release
+  owner: getsops
+  repo: sops
+  # sops tags carry a "v" prefix (e.g. "v3.13.3"); the captured version does
+  # not. The two spellings are NOT interchangeable in this project — see the
+  # asset-naming note below, where the raw binaries keep the `v` and the
+  # distro packages drop it. Verified across every listed release back to
+  # v3.9.0: uniform bare `vMAJOR.MINOR.PATCH`, no rc/beta suffix anywhere.
+  tag_pattern: "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+
+# ─── libc gate (Phase 3.5) — the evidence, not the conclusion ───────────────
+#
+# `os.features` states what an artifact REQUIRES OF THE HOST. sops is pure Go
+# with no cgo in the release build, so upstream ships one Linux binary per arch
+# with no musl/gnu split. Measured on ALL FOUR declared Linux artifacts at BOTH
+# ends of the mirrored range (2 arches × 3.13.1 and 3.13.3), not just the
+# newest:
+#
+#   $ file sops-v3.13.3.linux.amd64
+#   ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, stripped
+#   $ file sops-v3.13.3.linux.arm64
+#   ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically
+#   linked, Go BuildID=…, stripped
+#   $ readelf -l sops-v3.13.{1,3}.linux.{amd64,arm64} | grep -c INTERP → 0 (all four)
+#   $ readelf -d sops-v3.13.{1,3}.linux.{amd64,arm64} | grep -c NEEDED → 0 (all four)
+#
+#     ⇒ requires NOTHING of the host → BARE `linux/amd64` and `linux/arm64`.
+#       The alpine container leg in ../mirror-base.yml is what turns that
+#       universality claim into evidence.
+#
+#   UPX check (a packer stub defeats the two greps above — it leaves no
+#   PT_INTERP and no section headers, so `file` calls even a glibc-dynamic
+#   binary "statically linked"):
+#   $ strings -a sops-v3.13.{1,3}.linux.{amd64,arm64} | grep -c '^UPX' → 0 (all four)
+#   $ readelf -h … | grep 'Number of section headers' → 16 (all four)
+#       Not packed, so the static reading above stands on its own.
+#
+#   $ stat -c '%a' sops-v3.13.*.linux.*          → 644 (every asset)
+#       GitHub serves raw binaries WITHOUT the exec bit. `prepare` chmods 0755
+#       exactly the names metadata.json declares, which is why the hand-listed
+#       `binaries` claim there is load-bearing rather than documentation.
+#
+# ─── Asset format: RAW BINARY, and the triple-match trap on darwin ──────────
+#
+# Every asset here is an uncompressed binary — there is no tarball, no zip and
+# (unlike lefthook) no bare `.gz` twin to false-green on. What there IS is a
+# THIRD darwin asset: alongside `sops-vX.Y.Z.darwin.amd64` and
+# `sops-vX.Y.Z.darwin.arm64`, upstream ships a bare `sops-vX.Y.Z.darwin` with
+# no arch suffix on EVERY release. A `.*darwin.*` pattern therefore matches
+# THREE assets (the bare one, and both arch-split ones), which is a hard
+# ambiguous error rather than a silent skip — and a `^sops-v.*\.darwin$`-style
+# near-miss would silently take the wrong file. Both darwin patterns below are
+# anchored on the exact arch suffix, so the bare artifact is never a candidate.
+#
+# ─── The windows asymmetry ──────────────────────────────────────────────────
+#
+# linux and darwin assets carry an OS token (`.linux.amd64`, `.darwin.arm64`);
+# the WINDOWS assets carry NONE — they are `sops-vX.Y.Z.amd64.exe` and
+# `sops-vX.Y.Z.arm64.exe`. So the windows patterns are shaped differently from
+# every other platform's, and `\.exe$` is the whole of what distinguishes
+# `sops-v3.13.3.amd64.exe` from `sops-v3.13.3.linux.amd64`. windows/arm64
+# genuinely exists upstream (unusual for this fleet) and is declared.
+#
+# ─── Scope + resolution (verified on EVERY in-range release) ────────────────
+#
+# The mirrored range is exactly v3.13.1, v3.13.2, v3.13.3 — three releases.
+# Each of the six patterns below was matched against each release's FULL
+# 21-asset list: EXACTLY ONE match, every time, and no asset was claimed by two
+# patterns. A pattern matching zero is silently skipped rather than an error,
+# which would yield a green run with a missing platform. No in-range release is
+# asset-less, and every release's asset names carry ITS OWN version string
+# (3.13.1 assets on v3.13.1, and so on) — checked explicitly, because an
+# upstream shipping the previous version's binaries under a new tag greens
+# everything.
+#
+# Upstream also publishes, and this mirror deliberately does not carry:
+#   sops-vX.Y.Z.darwin                  — bare, arch-less darwin artifact
+#   sops-vX.Y.Z.*.spdx.sbom.json        — one SBOM sidecar per raw binary
+#   sops-vX.Y.Z.checksums.{txt,sigstore.json} — checksum + signature sidecars
+#   sops-vX.Y.Z.intoto.jsonl            — ONE whole-release SLSA provenance
+#                                         file, not one per binary
+#   sops-X.Y.Z-1.{x86_64,aarch64}.rpm   — distro packages. Note these spell the
+#   sops_X.Y.Z_{amd64,arm64}.deb          version WITHOUT the `v` and with a
+#                                         different separator, so a single
+#                                         substitution regex can never cover
+#                                         both families.
+# The `^sops-v…$` anchoring is what keeps all of the above out: the leading
+# `sops-v` excludes every rpm/deb, and the `$` excludes every `.spdx.sbom.json`
+# sidecar (each of which is its binary's name plus a suffix, i.e. a strict
+# prefix match on an unanchored pattern).
+assets:
+  linux/amd64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.linux\\.amd64$"
+  linux/arm64:
+    - "^sops-v\\d+\\.\\d+\\.\\d+\\.linux\\.arm64$"
+  # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
+  # Uncommented together with the matching `platforms:` keys in
+  # ../mirror-base.yml, never on their own. The arch suffix is mandatory here —
+  # see the triple-match trap above.
+  # darwin/amd64:
+  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.amd64$"
+  # darwin/arm64:
+  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.darwin\\.arm64$"
+  #
+  # ── Pass 3 (windows) ───────────────────────────────────────────────────────
+  # No `.windows.` infix upstream — the `.exe` suffix is the only OS marker.
+  # windows/amd64:
+  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.amd64\\.exe$"
+  # windows/arm64:
+  #   - "^sops-v\\d+\\.\\d+\\.\\d+\\.arm64\\.exe$"
+
+asset_type:
+  # Raw binary on every platform — there is no archive to strip, so the file
+  # lands directly at the content root and PATH is a bare ${installPath}. That
+  # is the one layout where a bare ${installPath} is correct, and it is why
+  # `bin_scan` must stay `off` with `binaries` hand-listed (../mirror-base.yml).
+  #
+  # The upstream Windows assets already END in `.exe`, so the suffix survives
+  # into the bundle and no per-platform `name: sops.exe` override is needed —
+  # `asset_type: binary` PRESERVES an upstream suffix and never synthesises
+  # one, so a suffix-less windows asset (mirror-direnv's case) is what would
+  # need the override. Verified locally rather than assumed: `pipeline prepare`
+  # against a windows/amd64-only temp spec, then `tar tvf` on the bundle showed
+  # `-rwxr-xr-x … sops.exe`.
+  type: binary
+  name: sops
+
+metadata:
+  default: metadata.json
+
+catalog:
+  logo: logo.svg
+
+versions:
+  # 3.13.1 is the floor, and it is a CATALOG-SCOPE choice rather than a forced
+  # one: the raw-binary naming scheme is uniform well below it. What DOES move
+  # at the 3.13.0 boundary is the signing sidecar (3.13.x ships
+  # `.checksums.sigstore.json`; 3.12.x and older ship `.checksums.pem` +
+  # `.checksums.sig`) — excluded either way, but it marks the release-tooling
+  # change this floor sits above. Every in-range release is complete: none is
+  # missing a declared platform's asset, and an asset-less release inside the
+  # range would be dropped SILENTLY by the pipeline.
+  min: "3.13.1"
+  new_per_run: 5
+  poll_interval: "53 */6 * * *"
+
+tests:
+  # `script:` resolves from the REPOSITORY ROOT — unlike `metadata.default` and
+  # `catalog.logo` above, which resolve against this spec's own directory.
+  - name: smoke
+    script: sops/tests/smoke.star
+
+annotations:
+  # From the Phase 1.5 license gate:
+  #   $ gh api repos/getsops/sops/license --jq '.license.spdx_id'
+  #   MPL-2.0
+  # Weak (file-level) copyleft: MPL-2.0 §3.2 grants redistribution of the
+  # executable form, and the share-alike duty attaches to MODIFIED MPL-covered
+  # source files — of which this mirror has none. §3.2(a) still requires that
+  # recipients be told where the Source Code Form is; NOTICE.md carries the
+  # per-version release-tag URL for that.
+  org.opencontainers.image.licenses: "MPL-2.0"
+
+announce:
+  # Spelled out, not derived from target.repository — the logical name and the
+  # physical path are related by convention only.
+  package: getsops/sops
+  fork: ocx-contrib/index
