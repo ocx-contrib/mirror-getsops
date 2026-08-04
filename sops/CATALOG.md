@@ -47,17 +47,6 @@ creation_rules:
 sops exec-env secrets.enc.yaml 'printenv DATABASE_URL'
 ```
 
-## Install with ocx
-
-```sh
-ocx install ocx.sh/getsops/sops
-```
-
-```sh
-# or pin a specific version
-ocx install ocx.sh/getsops/sops:3.13.3
-```
-
 ## Links
 
 - [sops on GitHub](https://github.com/getsops/sops)
